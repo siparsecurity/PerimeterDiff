@@ -7,3 +7,11 @@ A free alternative to paid attack surface monitoring platforms. Tracks subdomain
 ## Status
 
 Stage 1 (Recon) complete. Wraps `subfinder` to enumerate subdomains and stores them as a scan snapshot in SQLite.
+
+## Stages
+
+1. Recon: subfinder wrapper, baseline subdomains in SQLite (done)
+2. Probe: httpx wrapper, live host check, status codes, titles
+3. Fingerprint: nmap ports + tech stack detection
+4. Diff engine: compares current scan to last snapshot, flags new/removed/changed assets
+5. Report/alert: CLI output, JSON export, optional webhook
