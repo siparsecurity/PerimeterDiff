@@ -9,6 +9,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+from datetime import datetime, timezone
 
 
 SCHEMA = """
@@ -75,3 +76,20 @@ def run_subfinder(target, timeout=120):
             findings.append((host, source))
 
     return findings
+
+
+def store_scan(conn, target, findings):
+    run_at = datetime.now(timezone.utc).isoformat()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO scans (target, stage, run_at) VALUES (?, ?, ?)",
+        (target, "recon", run_at),
+    )
+    scan_id = cur.lastrowid
+
+    cur.executemany(
+        "INSERT INTO subdomains (scan_id, target, subdomain, source) VALUES (?, ?, ?, ?)",
+        [(scan_id, target, host, source) for host, source in findings],
+    )
+    conn.commit()
+    return scan_id
