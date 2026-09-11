@@ -5,7 +5,10 @@ Wraps subfinder to enumerate subdomains for a target and stores them
 as a scan snapshot in SQLite for later diffing.
 """
 
+import json
 import sqlite3
+import subprocess
+import sys
 
 
 SCHEMA = """
@@ -34,3 +37,41 @@ def init_db(db_path):
     conn.executescript(SCHEMA)
     conn.commit()
     return conn
+
+
+def run_subfinder(target, timeout=120):
+    """Run subfinder in silent JSON mode and return list of (subdomain, source)."""
+    cmd = ["subfinder", "-d", target, "-silent", "-oJ"]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+    except FileNotFoundError:
+        print("[!] subfinder not found on PATH. Install it first: "
+              "go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+              file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print(f"[!] subfinder timed out after {timeout}s for {target}", file=sys.stderr)
+        sys.exit(1)
+
+    if result.returncode != 0 and not result.stdout:
+        print(f"[!] subfinder failed: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    findings = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+            host = obj.get("host")
+            source = obj.get("source", "unknown")
+        except json.JSONDecodeError:
+            host = line
+            source = "unknown"
+        if host:
+            findings.append((host, source))
+
+    return findings
