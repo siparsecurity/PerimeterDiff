@@ -15,3 +15,11 @@ Stage 1 (Recon) complete. Wraps `subfinder` to enumerate subdomains and stores t
 3. Fingerprint: nmap ports + tech stack detection
 4. Diff engine: compares current scan to last snapshot, flags new/removed/changed assets
 5. Report/alert: CLI output, JSON export, optional webhook
+
+## Usage
+
+```bash
+python3 recon.py -d example.com
+```
+
+Requires [subfinder](https://github.com/projectdiscovery/subfinder) on PATH.
