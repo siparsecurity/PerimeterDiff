@@ -5,6 +5,7 @@ Wraps subfinder to enumerate subdomains for a target and stores them
 as a scan snapshot in SQLite for later diffing.
 """
 
+import argparse
 import json
 import sqlite3
 import subprocess
@@ -93,3 +94,28 @@ def store_scan(conn, target, findings):
     )
     conn.commit()
     return scan_id
+
+
+def main():
+    parser = argparse.ArgumentParser(description="PerimeterDiff Stage 1: Recon")
+    parser.add_argument("-d", "--domain", required=True, help="Target domain")
+    parser.add_argument("--db", default="perimeterdiff.db", help="SQLite DB path")
+    parser.add_argument("--timeout", type=int, default=120, help="subfinder timeout in seconds")
+    args = parser.parse_args()
+
+    conn = init_db(args.db)
+    print(f"[*] Running subfinder against {args.domain} ...")
+    findings = run_subfinder(args.domain, timeout=args.timeout)
+
+    if not findings:
+        print("[!] No subdomains found.")
+        sys.exit(0)
+
+    scan_id = store_scan(conn, args.domain, findings)
+    print(f"[+] Scan #{scan_id}: stored {len(findings)} subdomains for {args.domain}")
+    for host, source in sorted(findings):
+        print(f"    {host}  ({source})")
+
+
+if __name__ == "__main__":
+    main()
