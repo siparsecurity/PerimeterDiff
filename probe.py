@@ -46,3 +46,25 @@ def init_probe_db(db_path):
     conn.executescript(PROBE_SCHEMA)
     conn.commit()
     return conn
+
+
+def get_latest_recon_scan(conn, target):
+    """Return the most recent recon scan_id for a target, or None."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id FROM scans WHERE target = ? AND stage = 'recon' "
+        "ORDER BY id DESC LIMIT 1",
+        (target,),
+    )
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def load_subdomains(conn, scan_id):
+    """Return the list of subdomains stored under a given recon scan."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT DISTINCT subdomain FROM subdomains WHERE scan_id = ?",
+        (scan_id,),
+    )
+    return [row[0] for row in cur.fetchall()]
