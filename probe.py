@@ -68,3 +68,71 @@ def load_subdomains(conn, scan_id):
         (scan_id,),
     )
     return [row[0] for row in cur.fetchall()]
+
+
+def run_httpx(subdomains, timeout=300, threads=50):
+    """Feed subdomains to httpx via stdin, return parsed live host records."""
+    cmd = [
+        "httpx",
+        "-silent",
+        "-json",
+        "-status-code",
+        "-title",
+        "-web-server",
+        "-content-length",
+        "-follow-redirects",
+        "-threads", str(threads),
+    ]
+
+    stdin_data = "\n".join(subdomains)
+
+    try:
+        result = subprocess.run(
+            cmd,
+            input=stdin_data,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError:
+        print("[!] httpx not found on PATH. Install it first: "
+              "go install github.com/projectdiscovery/httpx/cmd/httpx@latest",
+              file=sys.stderr)
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print(f"[!] httpx timed out after {timeout}s", file=sys.stderr)
+        sys.exit(1)
+
+    if result.returncode != 0 and not result.stdout:
+        print(f"[!] httpx failed: {result.stderr.strip()}", file=sys.stderr)
+        sys.exit(1)
+
+    return parse_httpx_output(result.stdout)
+
+
+def parse_httpx_output(raw_output):
+    """Parse httpx JSONL output into normalised host records."""
+    hosts = []
+    for line in raw_output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        subdomain = obj.get("input") or obj.get("host") or ""
+        if not subdomain:
+            continue
+
+        hosts.append({
+            "subdomain": subdomain,
+            "url": obj.get("url"),
+            "status_code": obj.get("status_code"),
+            "title": obj.get("title"),
+            "webserver": obj.get("webserver"),
+            "content_length": obj.get("content_length"),
+        })
+
+    return hosts
