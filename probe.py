@@ -167,3 +167,49 @@ def store_probe(conn, target, hosts):
     )
     conn.commit()
     return scan_id
+
+
+def main():
+    parser = argparse.ArgumentParser(description="PerimeterDiff Stage 2: Probe")
+    parser.add_argument("-d", "--domain", required=True, help="Target domain")
+    parser.add_argument("--db", default="perimeterdiff.db", help="SQLite DB path")
+    parser.add_argument("--scan-id", type=int,
+                        help="Recon scan ID to probe (default: latest)")
+    parser.add_argument("--timeout", type=int, default=300,
+                        help="httpx timeout in seconds")
+    parser.add_argument("--threads", type=int, default=50,
+                        help="httpx concurrency")
+    args = parser.parse_args()
+
+    conn = init_probe_db(args.db)
+
+    scan_id = args.scan_id or get_latest_recon_scan(conn, args.domain)
+    if scan_id is None:
+        print(f"[!] No recon scan found for {args.domain}. Run recon.py first.",
+              file=sys.stderr)
+        sys.exit(1)
+
+    subdomains = load_subdomains(conn, scan_id)
+    if not subdomains:
+        print(f"[!] Recon scan #{scan_id} has no subdomains stored.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[*] Probing {len(subdomains)} subdomains from recon scan #{scan_id} ...")
+    hosts = run_httpx(subdomains, timeout=args.timeout, threads=args.threads)
+
+    if not hosts:
+        print("[!] No live hosts found.")
+        sys.exit(0)
+
+    probe_scan_id = store_probe(conn, args.domain, hosts)
+    print(f"[+] Probe scan #{probe_scan_id}: {len(hosts)} live of "
+          f"{len(subdomains)} subdomains")
+
+    for h in sorted(hosts, key=lambda x: x["subdomain"]):
+        status = h["status_code"] if h["status_code"] is not None else "-"
+        title = (h["title"] or "")[:50]
+        print(f"    [{status}] {h['url'] or h['subdomain']}  {title}")
+
+
+if __name__ == "__main__":
+    main()
