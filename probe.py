@@ -136,3 +136,34 @@ def parse_httpx_output(raw_output):
         })
 
     return hosts
+
+
+def store_probe(conn, target, hosts):
+    """Create a probe scan row and store all live host records under it."""
+    run_at = datetime.now(timezone.utc).isoformat()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO scans (target, stage, run_at) VALUES (?, ?, ?)",
+        (target, "probe", run_at),
+    )
+    scan_id = cur.lastrowid
+
+    cur.executemany(
+        "INSERT INTO hosts (scan_id, target, subdomain, url, status_code, "
+        "title, webserver, content_length) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                scan_id,
+                target,
+                h["subdomain"],
+                h["url"],
+                h["status_code"],
+                h["title"],
+                h["webserver"],
+                h["content_length"],
+            )
+            for h in hosts
+        ],
+    )
+    conn.commit()
+    return scan_id
